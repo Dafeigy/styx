@@ -1,0 +1,81 @@
+pub mod set;
+pub mod get;
+pub mod delete;
+pub mod list;
+pub mod db;
+pub mod sync;
+
+use clap::{Parser, Subcommand};
+
+/// Styx — a personal key-value store with cross-device S3 sync.
+#[derive(Parser)]
+#[command(name = "styx", version, about, long_about = None)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Command,
+}
+
+#[derive(Subcommand)]
+pub enum Command {
+    /// Set a value for a key with an optional @db.
+    /// If VALUE is omitted, reads from stdin.
+    #[command(visible_alias = "put")]
+    Set(set::SetArgs),
+
+    /// Get a value for a key with an optional @db.
+    Get(get::GetArgs),
+
+    /// Delete a key with an optional @db.
+    #[command(visible_aliases = ["del", "rm"])]
+    Delete(delete::DeleteArgs),
+
+    /// List key-value pairs with an optional @db.
+    #[command(visible_alias = "ls")]
+    List(list::ListArgs),
+
+    /// List all databases.
+    #[command(visible_alias = "ls-db")]
+    ListDbs,
+
+    /// Delete a database and all its contents.
+    #[command(visible_aliases = ["del-db", "rm-db"])]
+    DeleteDb(db::DeleteDbArgs),
+
+    /// Push a local database to S3.
+    Push(sync::PushArgs),
+
+    /// Pull a database from S3, overwriting local.
+    Pull(sync::PullArgs),
+
+    /// Bidirectional sync: push local changes, pull remote changes.
+    Sync(sync::SyncArgs),
+
+    /// Show sync status (local vs remote diff).
+    SyncStatus,
+}
+
+/// Parses a KEY@DB argument into (key_bytes, db_name).
+///
+/// Rules:
+/// - `foo`      → (b"foo", "default")
+/// - `foo@bar`  → (b"foo", "bar")
+/// - `@bar`     → (b"", "bar")     — used for list, delete-db
+/// - `foo@a@b`  → error            — too many @
+pub fn parse_key(key: &str) -> anyhow::Result<(Vec<u8>, String)> {
+    let parts: Vec<&str> = key.splitn(3, '@').collect();
+
+    match parts.len() {
+        1 => {
+            let k = parts[0].to_lowercase();
+            Ok((k.into_bytes(), "default".to_string()))
+        }
+        2 => {
+            let k = parts[0].to_lowercase();
+            let db = parts[1].to_lowercase();
+            Ok((k.into_bytes(), db))
+        }
+        _ => {
+            anyhow::bail!("bad key format '{}', use KEY@DB", key)
+        }
+    }
+}

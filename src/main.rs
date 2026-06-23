@@ -1,0 +1,30 @@
+mod cli;
+mod store;
+mod sync;
+mod util;
+
+use clap::Parser;
+use cli::{Cli, Command};
+
+#[tokio::main]
+async fn main() {
+    let cli = Cli::parse();
+
+    let result = match cli.command {
+        Command::Set(args) => cli::set::run(args),
+        Command::Get(args) => cli::get::run(args),
+        Command::Delete(args) => cli::delete::run(args),
+        Command::List(args) => cli::list::run(args),
+        Command::ListDbs => cli::db::run_list_dbs(),
+        Command::DeleteDb(args) => cli::db::run_delete_db(args),
+        Command::Push(args) => cli::sync::run_push(args).await,
+        Command::Pull(args) => cli::sync::run_pull(args).await,
+        Command::Sync(args) => cli::sync::run_sync(args).await,
+        Command::SyncStatus => cli::sync::run_sync_status().await,
+    };
+
+    if let Err(err) = result {
+        eprintln!("error: {:#}", err);
+        std::process::exit(1);
+    }
+}

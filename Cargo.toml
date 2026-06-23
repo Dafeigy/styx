@@ -1,0 +1,58 @@
+[package]
+name = "styx"
+version = "0.1.0"
+edition = "2021"
+description = "A personal key-value store with cross-device S3 sync"
+license = "MIT"
+repository = "https://github.com/cybersh1t/styx"
+
+[[bin]]
+name = "styx"
+path = "src/main.rs"
+
+[dependencies]
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Local storage
+redb = "2"
+
+# S3 sync
+rust-s3 = { version = "0.34", features = ["tokio-rustls-tls"] }
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Hashing
+sha2 = "0.10"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Paths
+dirs = "5"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Terminal detection
+is-terminal = "0.4"
+
+# Fuzzy matching (for db suggestion on typos)
+strsim = "0.11"
+
+# Hostname (for device ID in sync manifest)
+hostname = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+tokio-test = "0.4"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+opt-level = "s"

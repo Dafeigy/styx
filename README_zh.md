@@ -1,0 +1,154 @@
+# styx
+
+> 一款支持 S3 跨设备同步的个人键值存储 CLI 工具。基于 Rust 编写，灵感来源于 [charmbracelet/skate](https://github.com/charmbracelet/skate)。
+
+## 特性
+
+- **简洁的 CLI** — `set`、`get`、`delete`、`list`，支持 `KEY@DB` 命名空间
+- **嵌入式存储** — 基于 [redb](https://github.com/cberner/redb)，纯 Rust 编写，ACID 保障
+- **跨设备同步** — 通过 S3 兼容存储（AWS S3、Cloudflare R2、MinIO、Backblaze B2）进行 push/pull/sync
+- **管道友好** — 从 stdin 读取值，输出到 stdout，完美融入 shell 管道
+- **离线优先** — 所有读写操作针对本地存储，同步为显式操作，需主动触发
+
+## 安装
+
+```bash
+cargo install --path .
+```
+
+或从源码构建：
+
+```bash
+git clone https://github.com/cybersh1t/styx.git
+cd styx
+cargo build --release
+# 二进制文件位于 target/release/styx
+```
+
+## 快速开始
+
+```bash
+# 存储一个值
+styx set api-key sk-abc123
+
+# 存入指定数据库
+styx set api-key@work sk-xyz789
+
+# 读取值
+styx get api-key
+
+# 将文件内容存入 key
+cat ~/.ssh/id_rsa.pub | styx set ssh-key
+
+# 列出默认数据库中的所有键值
+styx list
+
+# 列出所有数据库
+styx list-dbs
+
+# 删除一个 key
+styx delete old-key@work
+```
+
+## Key 格式
+
+```
+KEY@DB
+```
+
+- `KEY` — 大小写不敏感，统一转为小写存储
+- `@DB` — 可选的数据库选择器，默认为 `"default"`
+- 示例：`foo`、`api-key@secrets`、`config@work`
+
+## 命令一览
+
+| 命令 | 别名 | 说明 |
+|---------|---------|-------------|
+| `styx set KEY [VALUE]` | `put` | 设置键值；省略 VALUE 则从 stdin 读取 |
+| `styx get KEY` | — | 获取键对应的值 |
+| `styx delete KEY` | `del`、`rm` | 删除一个键 |
+| `styx list [@DB]` | `ls` | 列出键值对 |
+| `styx list-dbs` | `ls-db` | 列出所有数据库 |
+| `styx delete-db @DB` | `del-db`、`rm-db` | 删除整个数据库 |
+| `styx push [@DB]` | — | 将本地数据库上传至 S3 |
+| `styx pull [@DB]` | — | 从 S3 下载数据库覆盖本地 |
+| `styx sync` | — | 双向同步所有数据库 |
+| `styx sync-status` | — | 显示本地与远程的差异 |
+
+### List 命令选项
+
+| 选项 | 短选项 | 说明 |
+|------|-------|-------------|
+| `--reverse` | `-r` | 按字典序倒序排列 |
+| `--keys-only` | `-k` | 只打印键名 |
+| `--values-only` | `-v` | 只打印值 |
+| `--delimiter` | `-d` | 键与值之间的分隔符（默认：制表符） |
+| `--show-binary` | `-b` | 显示二进制值（默认省略） |
+
+## 跨设备同步
+
+Styx 将数据库同步至 S3 兼容的对象存储。每个数据库以单个文件存储，同步协议为全文件上传/下载，配合 SHA-256 变更检测。
+
+### 配置
+
+设置以下环境变量：
+
+```bash
+export STYX_S3_ENDPOINT="https://s3.amazonaws.com"  # 或你的 S3 兼容端点
+export STYX_S3_BUCKET="my-styx-data"
+export STYX_S3_PREFIX="styx/"                        # 可选，默认：styx/
+export STYX_S3_REGION="us-east-1"                    # 可选，默认：us-east-1
+export STYX_S3_ACCESS_KEY="AKIA..."
+export STYX_S3_SECRET_KEY="..."
+```
+
+### 用法
+
+```bash
+# 将数据库推送至 S3
+styx push work
+
+# 从 S3 拉取数据库（覆盖本地）
+styx pull work
+
+# 双向同步（推送仅本地存在的，拉取仅远程存在的）
+styx sync
+
+# 查看变更状态
+styx sync-status
+```
+
+### 冲突处理
+
+如果本地和远程自上次同步后均已发生变更：
+
+```bash
+styx push work --force   # 以本地为准，覆盖远程
+styx pull work --force   # 以远程为准，覆盖本地
+```
+
+## 数据存储位置
+
+数据库以 `.redb` 文件形式存储：
+
+```
+~/.local/share/styx/
+├── default.redb
+├── work.redb
+├── secrets.redb
+└── .sync-manifest.json
+```
+
+可通过 `STYX_DATA_DIR` 自定义目录：
+
+```bash
+export STYX_DATA_DIR=/path/to/custom/dir
+```
+
+## 架构设计
+
+详见 [docs/architecture.md](docs/architecture.md)，包含完整的架构设计、crate 结构及设计决策。
+
+## License
+
+MIT

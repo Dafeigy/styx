@@ -56,7 +56,7 @@ jobs:
 
       - name: Build with cross (Linux musl)
         if: matrix.use_cross
-        run: cross build --release --target ${{ matrix.target }} --features openssl/vendored
+        run: cross build --release --target ${{ matrix.target }}
         env:
           OPENSSL_STATIC: 1
 

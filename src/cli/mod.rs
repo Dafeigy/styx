@@ -5,12 +5,39 @@ pub mod list;
 pub mod db;
 pub mod sync;
 pub mod config;
+pub mod help;
 
 use clap::{Parser, Subcommand};
+use clap::builder::Styles;
 
-/// Styx — a personal key-value store with cross-device S3 sync.
+fn help_styles() -> Styles {
+    use anstyle::{AnsiColor, Color, Style};
+
+    Styles::styled()
+        .header(
+            Style::new()
+                .fg_color(Some(Color::Ansi(AnsiColor::Magenta)))
+                .bold(),
+        )
+        .literal(
+            Style::new()
+                .fg_color(Some(Color::Ansi(AnsiColor::BrightRed))),
+        )
+        .usage(
+            Style::new()
+                .fg_color(Some(Color::Ansi(AnsiColor::Magenta)))
+                .bold(),
+        )
+}
+
+/// Styx, a personal key value store.
 #[derive(Parser)]
-#[command(name = "styx", version, about, long_about = None)]
+#[command(
+    name = "styx",
+    version,
+    about = "Styx, a personal key value store.",
+    styles = help_styles()
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,

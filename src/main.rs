@@ -9,6 +9,31 @@ use cli::{Cli, Command};
 
 #[tokio::main]
 async fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    // Show a custom welcome / help page when:
+    // - bare `styx` (no args)
+    // - `styx --help` or `styx -h` (only these flags, no subcommand)
+    if args.len() <= 1 {
+        cli::help::print_help();
+        return;
+    }
+
+    // Only intercept top-level help/version flags, not subcommand flags.
+    if args.len() == 2 {
+        match args[1].as_str() {
+            "--help" | "-h" => {
+                cli::help::print_help();
+                return;
+            }
+            "--version" | "-V" => {
+                println!("styx {}", env!("CARGO_PKG_VERSION"));
+                return;
+            }
+            _ => {}
+        }
+    }
+
     let cli = Cli::parse();
 
     let result = match cli.command {

@@ -1,4 +1,4 @@
-# clio
+# Clio
 
 > A personal key-value store with cross-device S3 sync. Built in Rust, inspired by [charmbracelet/skate](https://github.com/charmbracelet/skate).
 

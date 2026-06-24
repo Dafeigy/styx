@@ -1,4 +1,4 @@
-# clio
+# Clio
 
 > 一款支持 S3 跨设备同步的个人键值存储 CLI 工具。基于 Rust 编写，灵感来源于 [charmbracelet/skate](https://github.com/charmbracelet/skate)。
 

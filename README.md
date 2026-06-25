@@ -1,7 +1,12 @@
 # Clio
 
-<p>
-    <img src="imgs/icon.png" width="480" alt="A personal key-value store with cross-device S3 sync."><br>
+<p align="center">
+    <img src="imgs/icon.png" width="480" alt="A personal key-value store with cross-device S3 sync.">
+</p>
+
+<h1 align="center">Clio: A personal key-value store with cross-device S3 sync.</h1>
+
+<p align="center">
     <a href="https://github.com/dafeigy/clio/actions"><img src="https://github.com/Dafeigy/Clio/actions/workflows/release.yml/badge.svg" alt="Build Status"></a>
     <a href="https://github.com/dafeigy/clio/actions"><img src="https://img.shields.io/badge/Rust-1.80+-DEA584?logo=rust" alt="Build Status"></a>
 </p>

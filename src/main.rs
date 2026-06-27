@@ -66,6 +66,8 @@ async fn main() {
         Command::Sync(args) => cli::sync::run_sync(args).await,
         Command::SyncStatus => cli::sync::run_sync_status().await,
         Command::InitConfig => cli::config::run_init_config(),
+        Command::Completions(args) => cli::complete::run_completions(args),
+        Command::Complete(args) => cli::complete::run_complete(args),
     };
 
     if let Err(err) = result {

@@ -1,0 +1,312 @@
+//! Dynamic shell completion for keys and database names.
+//!
+//! Two commands live here:
+//! - `clio complete` (hidden) — the completion engine that queries the database
+//! - `clio completions <SHELL>` — generates a shell completion script to stdout
+
+use std::io::Write;
+
+use clap::CommandFactory;
+
+use crate::cli::Cli;
+use crate::store::Store;
+use crate::util::paths;
+
+/// Arguments for the hidden `complete` command.
+///
+/// This is the engine that powers dynamic tab-completion.  Shell completion
+/// scripts call it with whatever the user has typed so far and it prints
+/// matching keys (or database names) to stdout, one per line.
+#[derive(clap::Args)]
+#[command(hide = true)]
+pub struct CompleteArgs {
+    /// Partial text to complete (the text typed so far).
+    /// If omitted, lists all matching candidates.
+    #[arg(allow_hyphen_values = true)]
+    pub partial: Option<String>,
+
+    /// Database to query (defaults to "default"; ignored with --dbs).
+    #[arg(short, long, default_value = "default")]
+    pub db: String,
+
+    /// Complete database names instead of keys.
+    #[arg(short = 'D', long)]
+    pub dbs: bool,
+}
+
+/// Arguments for the `completions` command.
+#[derive(clap::Args)]
+pub struct CompletionsArgs {
+    /// Shell to generate completions for.
+    pub shell: String,
+}
+
+/// Run the `complete` subcommand.
+pub fn run_complete(args: CompleteArgs) -> anyhow::Result<()> {
+    let partial = args.partial.as_deref().unwrap_or("");
+
+    if args.dbs {
+        return complete_dbs(partial);
+    }
+
+    // Detect @db syntax: "mykey@prod" or "@prod"
+    if let Some(at_pos) = partial.rfind('@') {
+        let key_part = &partial[..at_pos];
+        let db_part = &partial[at_pos + 1..];
+
+        if key_part.is_empty() {
+            // "@pr" → complete database names
+            complete_dbs(db_part)
+        } else {
+            // "mykey@pr" → complete keys in the specified db
+            let db_name = if db_part.is_empty() {
+                "default".to_string()
+            } else {
+                db_part.to_lowercase()
+            };
+            complete_keys(&db_name, key_part)
+        }
+    } else {
+        complete_keys(&args.db, partial)
+    }
+}
+
+/// Run the `completions` subcommand — print a shell completion script.
+pub fn run_completions(args: CompletionsArgs) -> anyhow::Result<()> {
+    let shell: clap_complete::Shell = args
+        .shell
+        .parse()
+        .map_err(|_| anyhow::anyhow!("unknown shell '{}'. supported: bash, zsh, fish, elvish, powershell", args.shell))?;
+
+    match shell {
+        clap_complete::Shell::Bash => print_bash_completion(),
+        clap_complete::Shell::Zsh => print_zsh_completion(),
+        clap_complete::Shell::Fish => print_fish_completion(),
+        _ => {
+            let mut cmd = Cli::command();
+            clap_complete::generate(shell, &mut cmd, "clio", &mut std::io::stdout());
+            Ok(())
+        }
+    }
+}
+
+// ── completion engine helpers ──────────────────────────────────────────
+
+/// Print database names that start with `partial`, one per line.
+fn complete_dbs(partial: &str) -> anyhow::Result<()> {
+    let dbs = paths::list_dbs()?;
+    let lower = partial.to_lowercase();
+    for db in &dbs {
+        if db.to_lowercase().starts_with(&lower) {
+            println!("@{}", db);
+        }
+    }
+    Ok(())
+}
+
+/// Print keys in `db_name` that start with `partial`, one per line.
+fn complete_keys(db_name: &str, partial: &str) -> anyhow::Result<()> {
+    let store = match Store::open(db_name) {
+        Ok(s) => s,
+        Err(_) => return Ok(()), // db doesn't exist — no completions
+    };
+
+    let keys = store.iter_keys(false)?;
+    let lower = partial.to_lowercase();
+    for key in &keys {
+        let key_str = String::from_utf8_lossy(key);
+        if key_str.to_lowercase().starts_with(&lower) {
+            println!("{}", key_str);
+        }
+    }
+    Ok(())
+}
+
+// ── bash ───────────────────────────────────────────────────────────────
+
+fn print_bash_completion() -> anyhow::Result<()> {
+    let mut static_buf = Vec::new();
+
+    // Generate the static clap completion script.
+    {
+        let mut cmd = Cli::command();
+        clap_complete::generate(
+            clap_complete::Shell::Bash,
+            &mut cmd,
+            "clio",
+            &mut static_buf,
+        );
+    }
+
+    let static_script = String::from_utf8(static_buf)?;
+
+    // Rename the generated _clio function to _clio_static so we can wrap it.
+    let static_script = static_script.replace("_clio() {", "_clio_static() {");
+    // Also rename the completion registration line.
+    let static_script = static_script.replace(
+        "complete -F _clio clio",
+        "complete -F _clio clio\n# (static fallback registered via wrapper below)",
+    );
+
+    let mut out = std::io::stdout();
+
+    writeln!(out, "# clio completion for bash — generated by 'clio completions bash'")?;
+    writeln!(out)?;
+    writeln!(out, "_clio() {{")?;
+    writeln!(out, "    local cur cmd i")?;
+    writeln!(out, "    COMPREPLY=()")?;
+    writeln!(out, "    cur=\"${{COMP_WORDS[COMP_CWORD]}}\"")?;
+    writeln!(out)?;
+    writeln!(out, "    # Find the subcommand, skipping flags")?;
+    writeln!(out, "    cmd=\"\"")?;
+    writeln!(out, "    for ((i=1; i < COMP_CWORD; i++)); do")?;
+    writeln!(out, "        case \"${{COMP_WORDS[i]}}\" in")?;
+    writeln!(out, "            get|set|put|delete|del|rm) cmd=\"${{COMP_WORDS[i]}}\"; break ;;")?;
+    writeln!(out, "            list|ls) cmd=\"${{COMP_WORDS[i]}}\"; break ;;")?;
+    writeln!(out, "            delete-db|del-db|rm-db) cmd=\"${{COMP_WORDS[i]}}\"; break ;;")?;
+    writeln!(out, "            push|pull) cmd=\"${{COMP_WORDS[i]}}\"; break ;;")?;
+    writeln!(out, "        esac")?;
+    writeln!(out, "    done")?;
+    writeln!(out)?;
+    writeln!(out, "    case \"$cmd\" in")?;
+    writeln!(out, "        get|set|put|delete|del|rm)")?;
+    writeln!(out, "            # Complete keys from the default db (or @db syntax)")?;
+    writeln!(out, "            local keys")?;
+    writeln!(out, "            keys=$(clio complete \"$cur\" 2>/dev/null)")?;
+    writeln!(out, "            COMPREPLY=($(compgen -W \"$keys\" -- \"$cur\"))")?;
+    writeln!(out, "            return")?;
+    writeln!(out, "            ;;")?;
+    writeln!(out, "        delete-db|del-db|rm-db)")?;
+    writeln!(out, "            # Complete database names")?;
+    writeln!(out, "            local dbs")?;
+    writeln!(out, "            dbs=$(clio complete --dbs \"$cur\" 2>/dev/null)")?;
+    writeln!(out, "            COMPREPLY=($(compgen -W \"$dbs\" -- \"$cur\"))")?;
+    writeln!(out, "            return")?;
+    writeln!(out, "            ;;")?;
+    writeln!(out, "        push|pull|list|ls)")?;
+    writeln!(out, "            # Complete database names")?;
+    writeln!(out, "            local dbs")?;
+    writeln!(out, "            dbs=$(clio complete --dbs \"$cur\" 2>/dev/null)")?;
+    writeln!(out, "            COMPREPLY=($(compgen -W \"$dbs\" -- \"$cur\"))")?;
+    writeln!(out, "            return")?;
+    writeln!(out, "            ;;")?;
+    writeln!(out, "    esac")?;
+    writeln!(out)?;
+    writeln!(out, "    # Fall back to static completion (subcommands, flags)")?;
+    writeln!(out, "    _clio_static")?;
+    writeln!(out, "}}")?;
+    writeln!(out)?;
+    writeln!(out, "complete -F _clio clio")?;
+    writeln!(out)?;
+    // Emit the renamed static script.
+    write!(out, "{}", static_script)?;
+
+    Ok(())
+}
+
+// ── zsh ────────────────────────────────────────────────────────────────
+
+fn print_zsh_completion() -> anyhow::Result<()> {
+    let mut static_buf = Vec::new();
+
+    {
+        let mut cmd = Cli::command();
+        clap_complete::generate(
+            clap_complete::Shell::Zsh,
+            &mut cmd,
+            "clio",
+            &mut static_buf,
+        );
+    }
+
+    let static_script = String::from_utf8(static_buf)?;
+
+    // Rename the generated _clio function to _clio_static.
+    let static_script = static_script.replace("_clio() {", "_clio_static() {");
+
+    let mut out = std::io::stdout();
+
+    writeln!(out, "#compdef clio")?;
+    writeln!(out)?;
+    writeln!(out, "# clio completion for zsh — generated by 'clio completions zsh'")?;
+    writeln!(out)?;
+    writeln!(out, "_clio() {{")?;
+    writeln!(out, "    local context state line")?;
+    writeln!(out, "    typeset -A opt_args")?;
+    writeln!(out)?;
+    writeln!(out, "    # Determine which subcommand we're completing for")?;
+    writeln!(out, "    local cmd=\"$words[1]\"")?;
+    writeln!(out, "    for ((i=2; i < CURRENT; i++)); do")?;
+    writeln!(out, "        case \"$words[i]\" in")?;
+    writeln!(out, "            get|set|put|delete|del|rm) cmd=\"$words[i]\"; break ;;")?;
+    writeln!(out, "            list|ls) cmd=\"$words[i]\"; break ;;")?;
+    writeln!(out, "            delete-db|del-db|rm-db) cmd=\"$words[i]\"; break ;;")?;
+    writeln!(out, "            push|pull) cmd=\"$words[i]\"; break ;;")?;
+    writeln!(out, "        esac")?;
+    writeln!(out, "    done")?;
+    writeln!(out)?;
+    writeln!(out, "    case \"$cmd\" in")?;
+    writeln!(out, "        get|set|put|delete|del|rm)")?;
+    writeln!(out, "            local keys")?;
+    writeln!(out, "            keys=$(clio complete \"$PREFIX\" 2>/dev/null)")?;
+    writeln!(out, "            compadd -Q -- $=keys")?;
+    writeln!(out, "            return")?;
+    writeln!(out, "            ;;")?;
+    writeln!(out, "        delete-db|del-db|rm-db)")?;
+    writeln!(out, "            local dbs")?;
+    writeln!(out, "            dbs=$(clio complete --dbs \"$PREFIX\" 2>/dev/null)")?;
+    writeln!(out, "            compadd -Q -- $=dbs")?;
+    writeln!(out, "            return")?;
+    writeln!(out, "            ;;")?;
+    writeln!(out, "        push|pull|list|ls)")?;
+    writeln!(out, "            local dbs")?;
+    writeln!(out, "            dbs=$(clio complete --dbs \"$PREFIX\" 2>/dev/null)")?;
+    writeln!(out, "            compadd -Q -- $=dbs")?;
+    writeln!(out, "            return")?;
+    writeln!(out, "            ;;")?;
+    writeln!(out, "    esac")?;
+    writeln!(out)?;
+    writeln!(out, "    # Fall back to static completion")?;
+    writeln!(out, "    _clio_static \"$@\"")?;
+    writeln!(out, "}}")?;
+    writeln!(out)?;
+    // Emit the renamed static script.
+    write!(out, "{}", static_script)?;
+
+    Ok(())
+}
+
+// ── fish ───────────────────────────────────────────────────────────────
+
+fn print_fish_completion() -> anyhow::Result<()> {
+    let mut static_buf = Vec::new();
+
+    {
+        let mut cmd = Cli::command();
+        clap_complete::generate(
+            clap_complete::Shell::Fish,
+            &mut cmd,
+            "clio",
+            &mut static_buf,
+        );
+    }
+
+    let mut out = std::io::stdout();
+
+    writeln!(out, "# clio completion for fish — generated by 'clio completions fish'")?;
+    writeln!(out)?;
+    // Emit the static clap-complete output first (provides subcommand/flag completions).
+    out.write_all(&static_buf)?;
+    writeln!(out)?;
+
+    // Augment with dynamic key/db completion for the relevant subcommands.
+    writeln!(out, "# Dynamic key completion")?;
+    writeln!(out, "complete -c clio -n \"__fish_seen_subcommand_from get set put delete del rm\" \\")?;
+    writeln!(out, "    -a \"(clio complete (commandline -ct) 2>/dev/null)\"")?;
+    writeln!(out)?;
+    writeln!(out, "# Dynamic db completion")?;
+    writeln!(out, "complete -c clio -n \"__fish_seen_subcommand_from delete-db del-db rm-db push pull list ls\" \\")?;
+    writeln!(out, "    -a \"(clio complete --dbs (commandline -ct) 2>/dev/null)\"")?;
+
+    Ok(())
+}

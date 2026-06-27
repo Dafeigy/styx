@@ -6,6 +6,7 @@ pub mod db;
 pub mod sync;
 pub mod config;
 pub mod help;
+pub mod complete;
 
 use clap::{Parser, Subcommand};
 use clap::builder::Styles;
@@ -88,6 +89,13 @@ pub enum Command {
 
     /// Create a config file template at ~/.config/clio/config.toml.
     InitConfig,
+
+    /// Generate shell completion script (bash, zsh, fish).
+    Completions(complete::CompletionsArgs),
+
+    /// Dynamic completion engine for keys and database names (used by shell scripts).
+    #[command(hide = true)]
+    Complete(complete::CompleteArgs),
 }
 
 /// Parses a KEY@DB argument into (key_bytes, db_name).

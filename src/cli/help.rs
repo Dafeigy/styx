@@ -61,7 +61,7 @@ pub fn print_help() {
     // ── COMMANDS ──
     let _ = writeln!(std::io::stdout(), "  {}", styled("COMMANDS", heading_style));
 
-    let commands: &[(&str, &str); 12] = &[
+    let commands: &[(&str, &str); 13] = &[
         ("set KEY [@DB] [VALUE]", "Set a value for a key with an optional @db"),
         ("get KEY [@DB]",         "Get a value for a key with an optional @db"),
         ("delete KEY [@DB]",      "Delete a key with an optional @db"),
@@ -73,6 +73,7 @@ pub fn print_help() {
         ("sync [--flags]",        "Bidirectional sync"),
         ("sync-status",           "Show sync status (local vs remote diff)"),
         ("init-config",           "Create a config file template"),
+        ("completions <SHELL>",   "Generate shell completion script"),
         ("help [command]",        "Help about any command"),
     ];
 

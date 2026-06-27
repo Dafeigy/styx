@@ -98,6 +98,41 @@ KEY@DB
 | `--delimiter` | `-d` | Delimiter (default: tab) |
 | `--show-binary` | `-b` | Print binary values |
 
+## Shell Completion
+
+Clio provides tab completion for **keys**, **database names**, and **commands** in bash, zsh, and fish.
+
+### Setup
+
+**Bash** — add to `~/.bashrc`:
+
+```bash
+source <(clio completions bash)
+```
+
+**Zsh** — add to `~/.zshrc`:
+
+```zsh
+source <(clio completions zsh)
+```
+
+**Fish** — write the completion file once:
+
+```fish
+clio completions fish > ~/.config/fish/completions/clio.fish
+```
+
+### What you get
+
+```bash
+clio get he<TAB>         # → hello  help  herbs  hero
+clio delete @<TAB>       # → @default  @home  @work
+clio delete-db <TAB>     # → @default  @home  @work
+clio <TAB>               # → set  get  delete  list  push  pull  sync...
+```
+
+Key completion is **case-insensitive** and handles `KEY@DB` cross-database syntax — type `clio get mykey@pr<TAB>` and it completes database names after the `@`.
+
 ## Cross-Device Sync
 
 Clio syncs databases to S3-compatible object storage. Each database is stored as a single file; the sync protocol is full-file upload/download with SHA-256 change detection.

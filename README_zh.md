@@ -99,6 +99,41 @@ KEY@DB
 | `--delimiter` | `-d` | 键与值之间的分隔符（默认：制表符） |
 | `--show-binary` | `-b` | 显示二进制值（默认省略） |
 
+## Shell 补全
+
+Clio 支持在 bash、zsh、fish 中对 **key**、**数据库名**和**命令**进行 Tab 补全。
+
+### 配置
+
+**Bash** — 添加到 `~/.bashrc`：
+
+```bash
+source <(clio completions bash)
+```
+
+**Zsh** — 添加到 `~/.zshrc`：
+
+```zsh
+source <(clio completions zsh)
+```
+
+**Fish** — 一次性写入补全文件：
+
+```fish
+clio completions fish > ~/.config/fish/completions/clio.fish
+```
+
+### 效果演示
+
+```bash
+clio get he<TAB>         # → hello  help  herbs  hero
+clio delete @<TAB>       # → @default  @home  @work
+clio delete-db <TAB>     # → @default  @home  @work
+clio <TAB>               # → set  get  delete  list  push  pull  sync...
+```
+
+Key 补全**大小写不敏感**，并且自动处理 `KEY@DB` 跨数据库语法 — 输入 `clio get mykey@pr<TAB>` 即可在 `@` 之后补全数据库名。
+
 ## 跨设备同步
 
 Clio 将数据库同步至 S3 兼容的对象存储。每个数据库以单个文件存储，同步协议为全文件上传/下载，配合 SHA-256 变更检测。

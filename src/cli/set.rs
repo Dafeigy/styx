@@ -1,4 +1,5 @@
 use crate::cli::parse_key;
+use crate::config::ClioConfig;
 use crate::store::Store;
 use std::io::Read;
 
@@ -19,17 +20,38 @@ pub fn run(args: SetArgs) -> anyhow::Result<()> {
         anyhow::bail!("key cannot be empty");
     }
 
-    let store = Store::open(&db_name)?;
+    let config = ClioConfig::load()?;
+    let limit = config.store.max_value_size;
 
     let value_bytes = match args.value {
         Some(s) => s.into_bytes(),
         None => {
             let mut buf = Vec::new();
-            std::io::stdin().read_to_end(&mut buf)?;
+            if limit > 0 {
+                // Read at most limit+1 bytes; if we reach limit+1, we know
+                // the input exceeds the cap without buffering the entire stream.
+                std::io::stdin()
+                    .take(limit + 1)
+                    .read_to_end(&mut buf)?;
+            } else {
+                std::io::stdin().read_to_end(&mut buf)?;
+            }
             buf
         }
     };
 
+    if limit > 0 && value_bytes.len() > limit as usize {
+        anyhow::bail!(
+            "value is {} bytes, exceeds max_value_size of {} bytes ({:.1} MB)\n\
+             Adjust [store].max_value_size in ~/.config/clio/config.toml, \
+             or set it to 0 to disable the limit.",
+            value_bytes.len(),
+            limit,
+            limit as f64 / 1_048_576.0,
+        );
+    }
+
+    let store = Store::open(&db_name)?;
     store.set(&key_bytes, &value_bytes)?;
     Ok(())
 }

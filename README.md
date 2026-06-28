@@ -193,6 +193,24 @@ clio push work --force   # overwrite remote with local
 clio pull work --force   # overwrite local with remote
 ```
 
+### Value Size Limit
+
+By default, Clio enforces a **1 MB maximum per value** to prevent accidentally storing large binary files as keys. Adjust or disable this in your config:
+
+```toml
+# ~/.config/clio/config.toml
+[store]
+# Maximum size per value in bytes (0 = no limit)
+max_value_size = 1048576   # 1 MB
+```
+
+When the limit is exceeded:
+
+```
+error: value is 1100000 bytes, exceeds max_value_size of 1048576 bytes (1.0 MB)
+Adjust [store].max_value_size in ~/.config/clio/config.toml, or set it to 0 to disable the limit.
+```
+
 ## Data Location
 
 Databases are stored as `.redb` files:

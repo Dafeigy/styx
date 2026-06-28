@@ -7,6 +7,9 @@ use std::path::PathBuf;
 pub struct ClioConfig {
     #[serde(default)]
     pub s3: S3FileConfig,
+
+    #[serde(default)]
+    pub store: StoreConfig,
 }
 
 /// The `[s3]` section of the config file.
@@ -42,6 +45,26 @@ impl S3FileConfig {
     }
 }
 
+/// The `[store]` section of the config file.
+#[derive(Deserialize)]
+pub struct StoreConfig {
+    /// Maximum allowed size per value in bytes (0 = no limit).
+    #[serde(default = "default_max_value_size")]
+    pub max_value_size: u64,
+}
+
+impl Default for StoreConfig {
+    fn default() -> Self {
+        Self {
+            max_value_size: default_max_value_size(),
+        }
+    }
+}
+
+fn default_max_value_size() -> u64 {
+    1_048_576 // 1 MB
+}
+
 /// Auto-generated template — optional fields have their defaults pre-filled,
 /// required fields are left empty for the user to fill in.
 const CONFIG_TEMPLATE: &str = r#"# clio configuration
@@ -65,6 +88,11 @@ region = "us-east-1"
 # Access credentials (required)
 access_key = ""
 secret_key = ""
+
+[store]
+# Maximum size per value in bytes (0 = no limit).
+# 1048576 = 1 MB — generous for text, stops accidental binary dumps.
+max_value_size = 1048576
 "#;
 
 impl ClioConfig {

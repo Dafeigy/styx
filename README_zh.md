@@ -194,6 +194,24 @@ clio push work --force   # 以本地为准，覆盖远程
 clio pull work --force   # 以远程为准，覆盖本地
 ```
 
+### 值大小限制
+
+默认情况下，Clio 对每个值强制 **最大 1 MB** 的限制，防止意外将大型二进制文件存入 key。可在配置文件中调整或关闭：
+
+```toml
+# ~/.config/clio/config.toml
+[store]
+# 单个 value 的最大字节数（0 = 不限制）
+max_value_size = 1048576   # 1 MB
+```
+
+超出限制时的错误提示：
+
+```
+error: value is 1100000 bytes, exceeds max_value_size of 1048576 bytes (1.0 MB)
+Adjust [store].max_value_size in ~/.config/clio/config.toml, or set it to 0 to disable the limit.
+```
+
 ## 数据存储位置
 
 数据库以 `.redb` 文件形式存储：
